@@ -1,4 +1,9 @@
 using System.Text.Json;
+using System.Net.Http;
+using System.Collections.Generic;
+
+using System.Text.Json.Serialization;
+
 
 public static class SetsAndMaps
 {
@@ -22,7 +27,20 @@ public static class SetsAndMaps
     public static string[] FindPairs(string[] words)
     {
         // TODO Problem 1 - ADD YOUR CODE HERE
-        return [];
+        var seen = new HashSet<string>(words);
+        var result = new HashSet<string>();
+
+        foreach (var word in words)
+        {
+            var reversed = new string(word.Reverse().ToArray());
+            if (seen.Contains(reversed) && word != reversed)
+            {
+                var pair = string.Compare(word, reversed) < 0 ? $"{word} & {reversed}" : $"{reversed} & {word}";
+                result.Add(pair);
+            }
+        }
+
+        return result.ToArray();
     }
 
     /// <summary>
@@ -43,6 +61,15 @@ public static class SetsAndMaps
         {
             var fields = line.Split(",");
             // TODO Problem 2 - ADD YOUR CODE HERE
+            if (fields.Length >= 4)
+            {
+                var degree = fields[3].Trim();
+                if (degrees.ContainsKey(degree))
+                    degrees[degree]++;
+                else
+                    degrees[degree] = 1;
+            }
+
         }
 
         return degrees;
@@ -67,7 +94,21 @@ public static class SetsAndMaps
     public static bool IsAnagram(string word1, string word2)
     {
         // TODO Problem 3 - ADD YOUR CODE HERE
-        return false;
+        string clean1 = word1.Replace(" ", "").ToLower();
+        string clean2 = word2.Replace(" ", "").ToLower();
+
+        if (clean1.Length != clean2.Length) return false;
+
+        var dict1 = new Dictionary<char, int>();
+        var dict2 = new Dictionary<char, int>();
+
+        foreach (var c in clean1)
+            dict1[c] = dict1.GetValueOrDefault(c, 0) + 1;
+
+        foreach (var c in clean2)
+            dict2[c] = dict2.GetValueOrDefault(c, 0) + 1;
+
+        return dict1.OrderBy(kv => kv.Key).SequenceEqual(dict2.OrderBy(kv => kv.Key));
     }
 
     /// <summary>
@@ -85,22 +126,29 @@ public static class SetsAndMaps
     /// 
     /// </summary>
     public static string[] EarthquakeDailySummary()
+{
+    const string uri = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
+    using var client = new HttpClient();
+    using var getRequestMessage = new HttpRequestMessage(HttpMethod.Get, uri);
+    using var jsonStream = client.Send(getRequestMessage).Content.ReadAsStream();
+    using var reader = new StreamReader(jsonStream);
+    var json = reader.ReadToEnd();
+    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+    var featureCollection = JsonSerializer.Deserialize<FeatureCollection>(json, options);
+
+    if (featureCollection?.features == null)
+        return Array.Empty<string>();
+
+    var summaries = new List<string>();
+
+    foreach (var feature in featureCollection.features)
     {
-        const string uri = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
-        using var client = new HttpClient();
-        using var getRequestMessage = new HttpRequestMessage(HttpMethod.Get, uri);
-        using var jsonStream = client.Send(getRequestMessage).Content.ReadAsStream();
-        using var reader = new StreamReader(jsonStream);
-        var json = reader.ReadToEnd();
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
-        var featureCollection = JsonSerializer.Deserialize<FeatureCollection>(json, options);
-
-        // TODO Problem 5:
-        // 1. Add code in FeatureCollection.cs to describe the JSON using classes and properties 
-        // on those classes so that the call to Deserialize above works properly.
-        // 2. Add code below to create a string out each place a earthquake has happened today and its magitude.
-        // 3. Return an array of these string descriptions.
-        return [];
+        var mag = feature.properties.mag?.ToString("0.0") ?? "N/A";
+        var place = feature.properties.place ?? "Unknown Location";
+        summaries.Add($"{place} - Mag {mag}");
     }
+
+    return summaries.ToArray();
+}
 }
